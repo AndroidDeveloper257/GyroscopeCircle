@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">GyroscopeCircle</string>
+    <string name="configuration">Configuration</string>
 </resources>

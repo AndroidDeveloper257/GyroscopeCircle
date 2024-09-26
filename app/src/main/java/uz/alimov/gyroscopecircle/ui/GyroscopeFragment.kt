@@ -11,9 +11,13 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.SeekBar
+import android.widget.SeekBar.OnSeekBarChangeListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.ViewPropertyAnimatorCompat
 import androidx.fragment.app.Fragment
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import uz.alimov.gyroscopecircle.databinding.ConfigurationDialogBinding
 import uz.alimov.gyroscopecircle.databinding.FragmentGyroscopeBinding
 import kotlin.math.max
 import kotlin.math.min
@@ -30,6 +34,10 @@ class GyroscopeFragment : Fragment(), SensorEventListener {
     private val handler = Handler(Looper.getMainLooper())
     private val centerX: Float by lazy { binding.root.width / 2f - binding.circleView.width / 2f }
     private val centerY: Float by lazy { binding.root.height / 2f - binding.circleView.height / 2f }
+    private var sensitivity = 50f
+
+    private lateinit var configurationDialog: BottomSheetDialog
+    private lateinit var configurationBinding: ConfigurationDialogBinding
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -41,19 +49,54 @@ class GyroscopeFragment : Fragment(), SensorEventListener {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        // Set click listener to toggle gyroscope
-        binding.circleView.setOnClickListener {
-            isGyroscopeEnabled = !isGyroscopeEnabled
-            if (isGyroscopeEnabled) {
-                startGyroscope()
-            } else {
-                resetCirclePositionSmoothly()
+        binding.apply {
+            circleView.setOnClickListener {
+                isGyroscopeEnabled = !isGyroscopeEnabled
+                if (isGyroscopeEnabled) {
+                    startGyroscope()
+                } else {
+                    resetCirclePositionSmoothly()
+                }
             }
-        }
 
-        sensorManager = requireActivity().getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+            circleView.setOnLongClickListener {
+                showConfigurationDialog()
+                true
+            }
+
+            sensorManager =
+                requireActivity().getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+        }
+    }
+
+    private fun showConfigurationDialog() {
+        try {
+            configurationDialog.show()
+        } catch (e: Exception) {
+            configurationDialog = BottomSheetDialog(requireContext())
+            configurationBinding = ConfigurationDialogBinding.inflate(layoutInflater)
+            configurationDialog.setContentView(configurationBinding.root)
+            configurationDialog.show()
+        }
+        configurationBinding.apply {
+            sensitivitySeekbar.setOnSeekBarChangeListener(object : OnSeekBarChangeListener {
+                override fun onProgressChanged(p0: SeekBar?, p1: Int, p2: Boolean) {
+
+                }
+
+                override fun onStartTrackingTouch(seekbar: SeekBar?) {
+                }
+
+                override fun onStopTrackingTouch(seekbar: SeekBar?) {
+                    seekbar?.let {
+                        sensitivityTv.text = it.progress.toString()
+                        sensitivity = it.progress.toFloat()
+                    }
+                }
+
+            })
+        }
     }
 
     private fun startGyroscope() {
@@ -63,7 +106,6 @@ class GyroscopeFragment : Fragment(), SensorEventListener {
     }
 
     private fun resetCirclePositionSmoothly() {
-        // Smoothly move the circle back to the center when gyroscope is off
         circleAnimator = ViewCompat.animate(binding.circleView)
             .x(centerX)
             .y(centerY)
@@ -73,17 +115,22 @@ class GyroscopeFragment : Fragment(), SensorEventListener {
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
             if (isGyroscopeEnabled) {
-                val deltaX = it.values[1] * 50 // Scale movement for smoother response
-                val deltaY = it.values[0] * 50
+                val deltaX = it.values[1] * sensitivity
+                val deltaY = it.values[0] * sensitivity
 
                 val newX = binding.circleView.x + deltaX
                 val newY = binding.circleView.y + deltaY
 
-                // Ensure the circle doesn't move off-screen
                 val constrainedX =
-                    min(max(newX, 0f), binding.root.width - binding.circleView.width.toFloat())
+                    min(
+                        max(newX.toInt().toFloat(), 0f),
+                        binding.root.width - binding.circleView.width.toFloat()
+                    )
                 val constrainedY =
-                    min(max(newY, 0f), binding.root.height - binding.circleView.height.toFloat())
+                    min(
+                        max(newY.toInt().toFloat(), 0f),
+                        binding.root.height - binding.circleView.height.toFloat()
+                    )
 
                 handler.post {
                     binding.circleView.x = constrainedX
@@ -94,7 +141,7 @@ class GyroscopeFragment : Fragment(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Not used
+
     }
 
     override fun onResume() {
